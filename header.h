@@ -10,6 +10,8 @@
 # include <errno.h>
 # include <string.h>
 # include <signal.h>
+# include <stdint.h>
+# include <time.h>
 # define PTHREAD_BARRIER_SERIAL_THREAD -1 
 # define SAFE_PTHREAD(call)\
 do{\

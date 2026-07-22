@@ -1,7 +1,8 @@
 # include "header.h"
 # define NAT_TERM 0
 # define SIG_TERM 1
-# define MY_RAND_MAX 30
+# define SLEEP_MAX 30
+# define ITEM_MAX 100
 //abv defn of barrier in thread lib prevent error squiggles
 
 void* producer(void* param);
@@ -16,6 +17,17 @@ static pthread_barrier_t start_line; //producers and consumer methods have acces
 atomic_bool running;
 sig_atomic_t flag=1;
 static bool barrier_initialised=false;
+
+static uint32_t xorshift32(uint32_t *state)
+{
+    uint32_t x=*state;
+    x^=x<<13;
+    x^=x>>17;
+    x^=x>>5;
+
+    *state=x;
+    return x;
+}
 void cleanup()
 {
     free(tid_p);
@@ -32,7 +44,7 @@ void handler(int signal)
     const char buf[]="From insider the custom handler.\n";
     write(STDOUT_FILENO,&buf,sizeof(buf)-1);
     flag=0;
-    atomic_store(&running,false);
+    atomic_store_explicit(&running,false,memory_order_relaxed);
     
 }
 
@@ -102,7 +114,8 @@ int main(int argc,char* argv[])
     printf("MAIN GOING TO SLEEP\n");
     sleep((uint)sleep_time);//when signal arrives it will be awaken as TASK_INTERRUPTIBLE and wont be restarted
     printf("Main has awaken from sleep\n");
-    atomic_store(&running,false);
+    if(flag)
+    atomic_store_explicit(&running,false,memory_order_relaxed);
     wakeup_all_blockedthreads(producers,consumers);
     for(int i=0;i<producers;i++)
     {
@@ -137,6 +150,8 @@ int main(int argc,char* argv[])
 void* consumer(void* param)
 {
     int ucid=*(int*)param;
+    uint32_t rng_state=(uint32_t)time(NULL)^(uint32_t)ucid; //thread specific rng state
+    //inital seed
     int status=pthread_barrier_wait(&start_line);
     if(status==PTHREAD_BARRIER_SERIAL_THREAD) //this special value returned to exactly one thread rest receive 0 guranteeing messagae printed once
     {
@@ -150,9 +165,9 @@ void* consumer(void* param)
         exit(EXIT_FAILURE);
     }
     buffer_item item;
-    while(atomic_load(&running))
+    while(atomic_load_explicit(&running,memory_order_relaxed))
     {
-        sleep((uint)(rand()%MY_RAND_MAX));
+        sleep((uint)(xorshift32(&rng_state)%SLEEP_MAX+1));//+1 to avoid no sleep
         if(rm_item(&item))
         {
            if(!flag)
@@ -171,6 +186,7 @@ void* consumer(void* param)
 void* producer(void* param)
 {
     int upid=*(int*)param;
+    uint32_t rng_state=(uint32_t)time(NULL)^(uint32_t)upid;
     int status=pthread_barrier_wait(&start_line);
     if(status==PTHREAD_BARRIER_SERIAL_THREAD)
     {
@@ -182,10 +198,10 @@ void* producer(void* param)
         fprintf(stderr,"barrier failed:%s\n",strerror(status));
         exit(EXIT_FAILURE);
     }
-    while(atomic_load(&running))
+    while(atomic_load_explicit(&running,memory_order_relaxed))
     {
-        sleep((uint)(rand()%MY_RAND_MAX));
-        buffer_item item= rand()%MY_RAND_MAX;
+        sleep((uint)(xorshift32(&rng_state))%SLEEP_MAX+1);
+        buffer_item item= (buffer_item)(rng_state%ITEM_MAX);
         if(put_item(item))
         {
            if(!flag)

@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Wnull-dereference -Wconversion -g -pthread
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Wnull-dereference -Wconversion -Werror -g -pthread
 
 SRC = producer_consumer.c buffer.c
 TARGET = producer_consumer
