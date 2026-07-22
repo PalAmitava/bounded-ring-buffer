@@ -1,0 +1,14 @@
+# VS Code
+.vscode/
+
+# Executables
+a.out
+b.out
+producer_consumer
+pc_asan
+pc_tsan
+pc_ubsan
+
+# Notes
+ref.txt
+init.txt
