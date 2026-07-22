@@ -7,18 +7,22 @@
 void* producer(void* param);
 void* consumer(void* param);
 
-int *ids1,*ids2; //for cleanup associated with atexit
-pthread_t *tid_p,*tid_c;
+int *ids1=NULL,*ids2=NULL; //for cleanup associated with atexit
+
+pthread_t *tid_p=NULL,*tid_c=NULL;
+//initialised to NULL to prevent segfaults in premature termination : graceful shutdown
 
 static pthread_barrier_t start_line; //producers and consumer methods have access
 atomic_bool running;
 sig_atomic_t flag=1;
+static bool barrier_initialised=false;
 void cleanup()
 {
     free(tid_p);
     free(tid_c);
     free(ids1);
     free(ids2);
+    if(barrier_initialised)
     SAFE_PTHREAD(pthread_barrier_destroy(&start_line)); //we might destroy uninitialized barrier during premature termination
     rm_buf();
 }
@@ -63,6 +67,7 @@ int main(int argc,char* argv[])
     
     int total=producers+consumers;
     SAFE_PTHREAD(pthread_barrier_init(&start_line,NULL,(uint)total)); //NULL def. attribut
+    barrier_initialised=true;
 
     tid_p=(pthread_t*)malloc((size_t)producers*sizeof(pthread_t));
     tid_c=(pthread_t*)malloc((size_t)consumers*sizeof(pthread_t));

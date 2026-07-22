@@ -1,14 +1,16 @@
 # include "header.h"
 # define BUFFER_SIZE 10
 
-static buffer_item *buffer;
+static buffer_item *buffer=NULL;
 static int in;
 static int out;
 static int cap=0;
 static sem_t empty;
 static sem_t full;
 static pthread_mutex_t mutex;
-
+static bool __init_sem_EMPTY=false;
+static bool __init_sem_FULL=false;
+static bool __init_mutex=false;
 
 static inline void safe_sem_wait(sem_t* sem)
 {
@@ -49,16 +51,22 @@ void init_buffer(int sz)
     in=0;
     out=0;
     SAFE_PTHREAD(pthread_mutex_init(&mutex,NULL));
+    __init_mutex=true;
     if(sem_init(&empty,0,(uint)cap)==-1){ perror("Sem_init[empty]\n"); exit(EXIT_FAILURE);}
+    //2nd argument is flg =0 which tells sem shared by threads of same process that created the sem
+    __init_sem_EMPTY=true;
     if(sem_init(&full,0,0)==-1){ perror("Sem_init[full]\n"); exit(EXIT_FAILURE);}
-     //2nd argument is flg =0 which tells sem shared by threads of same process that created the sem
+    __init_sem_FULL=true;
 }
 
 void rm_buf()
 {
     free(buffer);
+    if(__init_sem_EMPTY)
     sem_destroy(&empty);
+    if(__init_sem_FULL)
     sem_destroy(&full);
+    if(__init_mutex)
     pthread_mutex_destroy(&mutex);
 }
 
