@@ -74,7 +74,7 @@ int put_item(buffer_item item)
 {
     safe_sem_wait(&empty);
     //might be awaken simply to terminate
-    if(atomic_load(&running)==false) return 1;
+    if(atomic_load_explicit(&running,memory_order_relaxed)==false) return 1;
     SAFE_PTHREAD(pthread_mutex_lock(&mutex)); //no point waiting for empty while blocked on mutex
     buffer[in]=item;
     in=(in+1)%cap;
@@ -87,8 +87,7 @@ int put_item(buffer_item item)
 int rm_item(buffer_item* item)
 {
     safe_sem_wait(&full);
-    
-    if(atomic_load(&running)==false) return 1;
+    if(atomic_load_explicit(&running,memory_order_relaxed)==false) return 1;
     SAFE_PTHREAD(pthread_mutex_lock(&mutex));
 
     *item=buffer[out];

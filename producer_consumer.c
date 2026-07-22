@@ -51,15 +51,9 @@ void handler(int signal)
 int main(int argc,char* argv[])
 {
     atexit(cleanup);
-    struct sigaction s;
-    s.sa_handler=handler;
-    s.sa_flags=0;
-    sigemptyset(&s.sa_mask);
-    if(sigaction(SIGINT,&s,NULL)==-1)
-    {
-        perror("sigaction");
-        exit(EXIT_FAILURE);
-    }
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set,SIGINT);
     if(argc!=5)
     {
         fprintf(stdout,"Usage: ./main <sleep_before_exit> <no. of producers> <no. of consumers> <buffer_sz>\n");
@@ -80,6 +74,8 @@ int main(int argc,char* argv[])
     int total=producers+consumers;
     SAFE_PTHREAD(pthread_barrier_init(&start_line,NULL,(uint)total)); //NULL def. attribut
     barrier_initialised=true;
+    SAFE_PTHREAD(pthread_sigmask(SIG_BLOCK,&set,NULL));
+    //all producers and consumer inherit the blocked mask
 
     tid_p=(pthread_t*)malloc((size_t)producers*sizeof(pthread_t));
     tid_c=(pthread_t*)malloc((size_t)consumers*sizeof(pthread_t));
@@ -111,11 +107,30 @@ int main(int argc,char* argv[])
         ids2[i]=500+i;
         SAFE_PTHREAD(pthread_create(&tid_c[i],&attr,consumer,&ids2[i]));
     }
+    //unblocking SIGINT only in main thread
+    SAFE_PTHREAD(pthread_sigmask(SIG_UNBLOCK,&set,NULL));
+    //installing signal handler
+    struct sigaction s;
+    s.sa_handler=handler;
+    s.sa_flags=0;
+    sigemptyset(&s.sa_mask);
+    if(sigaction(SIGINT,&s,NULL)==-1)
+    {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
     printf("MAIN GOING TO SLEEP\n");
     sleep((uint)sleep_time);//when signal arrives it will be awaken as TASK_INTERRUPTIBLE and wont be restarted
-    printf("Main has awaken from sleep\n");
-    if(flag)
-    atomic_store_explicit(&running,false,memory_order_relaxed);
+    
+    if(!flag)
+    {
+      atomic_store_explicit(&running,false,memory_order_relaxed);
+      printf("Main has awaken from sleep by signal\n");
+    }
+    else
+    {
+        printf("Main woke up from sleep because timer expired\n");
+    }
     wakeup_all_blockedthreads(producers,consumers);
     for(int i=0;i<producers;i++)
     {
